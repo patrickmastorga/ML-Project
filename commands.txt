@@ -1,0 +1,17 @@
+Batch flags
+
+#SBATCH --job-name=vae_test
+#SBATCH --nodes=1 --ntasks-per-node=12 --gres=gpu:V100:1
+#SBATCH --time=2:00:00
+#SBATCH --qos=coc-ice
+#SBATCH --output=./logs/task.out
+#SBATCH --mail-type=NONE
+
+salloc command:
+salloc --nodes=1 --ntasks-per-node=12 --gres=gpu:V100:1 --time=1:00:00
+
+Once into compute node:
+module purge
+module load cuda
+module load anaconda3
+conda activate compute
