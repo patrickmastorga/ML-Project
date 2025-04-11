@@ -1,8 +1,8 @@
 # imports
 import torch
 import torch.nn as nn
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
+from torchvision.datasets import CelebA
+import torchvision.transforms.functional as TF
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
@@ -11,87 +11,39 @@ from pathlib import Path
 from time import time
 
 from train import train_model
-from utils import generate_new_images, plot_latent_space_with_labels, generate_latent_space_traversal
+from utils import generate_new_images
 
 # define models
-class LinearEncoder(nn.Module):
-    """
-    Encoder for the Variational Autoencoder (VAE).
-    Maps input images to a latent space using a linear layer and ReLU activation.
-    """
-    def __init__(self, latent_dims=2, hidden_layer_size=256):
-        """
-        Args:
-            hidden_layer_size (int): Size of the hidden layer.
-            latent_dims (int): Number of dimensions in the latent space.
-        """
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(in_features=1*28*28, out_features=hidden_layer_size),
-            nn.ReLU(),
-            nn.Linear(in_features=hidden_layer_size, out_features=hidden_layer_size),
-            nn.ReLU()
-        )
-        self.output1 = nn.Linear(in_features=hidden_layer_size, out_features=latent_dims)
-        self.output2 = nn.Linear(in_features=hidden_layer_size, out_features=latent_dims)
-
-    def forward(self, x):
-        x = self.network(x)
-        mu = self.output1(x)
-        logvar = self.output2(x)
-        return mu, logvar
-
-class LinearDecoder(nn.Module):
-    """
-    Decoder for the Variational Autoencoder (VAE).
-    Maps latent space samples back to the original image space using a linear layer and ReLU activation.
-    """
-    def __init__(self, latent_dims=2, hidden_layer_size=256):
-        """
-        Args:
-            hidden_layer_size (int): Size of the hidden layer.
-            latent_dims (int): Number of dimensions in the latent space.
-        """
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(in_features=latent_dims, out_features=hidden_layer_size),
-            nn.ReLU(),
-            nn.Linear(in_features=hidden_layer_size, out_features=hidden_layer_size),
-            nn.ReLU(),
-            nn.Linear(in_features=hidden_layer_size, out_features=1*28*28),
-            nn.Sigmoid(),
-            nn.Unflatten(dim=1, unflattened_size=(1, 28, 28))
-        )
-
-    def forward(self, x):
-        x = self.network(x)
-        return x
-    
 class ConvEncoder(nn.Module):
     """
     Encoder for the Variational Autoencoder (VAE).
     Maps input images to a latent space using a linear layer and ReLU activation.
     """
-    def __init__(self, latent_dims=2, hidden_layer_size=128, base_channels=16):
+    def __init__(self, latent_dims: int = 64, base_channels: int = 32, nonlinearity: nn.Module = nn.ReLU):
         """
         Args:
             latent_dims (int): Number of dimensions in the latent space.
-            hidden_layer_size (int): Size of the hidden layer.
             initial_channels (int): Number of channels in the first convolutional layer.
+            nonlinearity (nn.Module): Nonlinear activation function to use.
         """
         super().__init__()
         self.network = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=base_channels, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=base_channels, out_channels=base_channels*2, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
+            nn.Conv2d(in_channels=3, out_channels=base_channels, kernel_size=4, stride=2, padding=1),                 # (3, 64, 64) -> (base_channels, 32, 32)
+            nn.GroupNorm(num_groups=base_channels, num_channels=base_channels),
+            nonlinearity(),
+            nn.Conv2d(in_channels=base_channels, out_channels=2*base_channels, kernel_size=4, stride=2, padding=1),   # (base_channels, 32, 32) -> (2*base_channels, 16, 16)
+            nn.GroupNorm(num_groups=base_channels, num_channels=2*base_channels),
+            nonlinearity(),
+            nn.Conv2d(in_channels=2*base_channels, out_channels=4*base_channels, kernel_size=4, stride=2, padding=1), # (2*base_channels, 16, 16) -> (4*base_channels, 8, 8)
+            nn.GroupNorm(num_groups=base_channels, num_channels=4*base_channels),
+            nonlinearity(),
+            nn.Conv2d(in_channels=4*base_channels, out_channels=8*base_channels, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 8) -> (8*base_channels, 4, 4)
+            #nn.GroupNorm(num_groups=base_channels, num_channels=8*base_channels),
             nn.Flatten(),
-            nn.Linear(in_features=base_channels*2*7*7, out_features=hidden_layer_size),
-            nn.ReLU()
+            nonlinearity(),
         )
-        self.output1 = nn.Linear(in_features=hidden_layer_size, out_features=latent_dims)
-        self.output2 = nn.Linear(in_features=hidden_layer_size, out_features=latent_dims)
+        self.output1 = nn.Linear(in_features=base_channels*8*4*4, out_features=latent_dims)
+        self.output2 = nn.Linear(in_features=base_channels*8*4*4, out_features=latent_dims)
 
     def forward(self, x):
         x = self.network(x)
@@ -104,7 +56,7 @@ class ConvDecoder(nn.Module):
     Decoder for the Variational Autoencoder (VAE).
     Maps latent space samples back to the original image space using a linear layer and ReLU activation.
     """
-    def __init__(self, latent_dims=2, hidden_layer_size=128, base_channels=16):
+    def __init__(self, latent_dims: int = 64, base_channels: int = 32, nonlinearity: nn.Module = nn.ReLU):
         """
         Args:
             latent_dims (int): Number of dimensions in the latent space.
@@ -113,14 +65,16 @@ class ConvDecoder(nn.Module):
         """
         super().__init__()
         self.network = nn.Sequential(
-            nn.Linear(in_features=latent_dims, out_features=hidden_layer_size),
-            nn.ReLU(),
-            nn.Linear(in_features=hidden_layer_size, out_features=base_channels*2*7*7),
-            nn.ReLU(),
-            nn.Unflatten(dim=1, unflattened_size=(base_channels*2, 7, 7)),
-            nn.ConvTranspose2d(in_channels=base_channels*2, out_channels=base_channels, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(in_channels=base_channels, out_channels=1, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.Linear(in_features=latent_dims, out_features=base_channels*8*4*4),
+            nonlinearity(),
+            nn.Unflatten(dim=1, unflattened_size=(base_channels*8, 4, 4)),
+            nn.ConvTranspose2d(in_channels=base_channels*8, out_channels=base_channels*4, kernel_size=4, stride=2, padding=1, output_padding=1), # (8*base_channels, 4, 4) -> (4*base_channels, 8, 8)
+            nonlinearity(),
+            nn.ConvTranspose2d(in_channels=base_channels*4, out_channels=base_channels*2, kernel_size=4, stride=2, padding=1, output_padding=1), # (4*base_channels, 8, 8) -> (2*base_channels, 16, 16)
+            nonlinearity(),
+            nn.ConvTranspose2d(in_channels=base_channels*2, out_channels=base_channels, kernel_size=4, stride=2, padding=1, output_padding=1),   # (2*base_channels, 16, 16) -> (base_channels, 32, 32)
+            nonlinearity(),
+            nn.ConvTranspose2d(in_channels=base_channels, out_channels=3, kernel_size=4, stride=2, padding=1, output_padding=1),                 # (base_channels, 32, 32) -> (3, 64, 64)
             nn.Sigmoid()
         )
 
@@ -196,13 +150,21 @@ if __name__ == "__main__":
     BATCH_SIZE = 128
     LEARNING_RATE = 1e-3
     EPOCHS = 10
-    LATENT_DIMS = 8
+    LATENT_DIMS = 128
     MODEL_NAME = 'mnist_vae_linear_lg8'
+    
+    # define transform for dataset
+    class CelebATransform:
+        def __call__(self, img):
+            img = TF.crop(img, top=60, left=25, height=128, width=128)
+            img = TF.resize(img, (64, 64))
+            img = TF.to_tensor(img)
+            return img
 
     # download MNIST dataset
     print('Loading dataset...')
-    train_data = MNIST(root='./data', train=True, transform=ToTensor(), download=True)
-    test_data = MNIST(root='./data', train=False, transform=ToTensor(), download=True)
+    train_data = CelebA(root='./data', split='train', target_type=[], transform=CelebATransform(), download=True)
+    test_data = CelebA(root='./data', split='test', target_type=[], transform=CelebATransform(), download=True)
 
     # define dataloaders for delivering batched data
     train_dataloader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
@@ -212,8 +174,8 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # define models
-    encoder = LinearEncoder(latent_dims=LATENT_DIMS, hidden_layer_size=512).to(device=device)
-    decoder = LinearDecoder(latent_dims=LATENT_DIMS, hidden_layer_size=512).to(device=device)
+    encoder = ConvEncoder(latent_dims=LATENT_DIMS).to(device=device)
+    decoder = ConvDecoder(latent_dims=LATENT_DIMS).to(device=device)
     vae = VAE(encoder, decoder).to(device=device)
 
     # initialize optimizer
@@ -226,18 +188,28 @@ if __name__ == "__main__":
     print('Training VAE...')
     start_time = time()
 
-    log_path = dir_path / "log.txt"
-    with open(log_path, "w") as f:
-        training_losses, validation_losses = train_model(
-            model=vae,
-            train_dataloader=train_dataloader,
-            test_dataloader=test_dataloader,
-            criterion=criterion,
-            optimizer=optimizer,
-            epochs=EPOCHS,
-            device=device,
-            log_file=f,
-        )
+    # log_path = dir_path / "log.txt"
+    # with open(log_path, "w") as f:
+    #     training_losses, validation_losses = train_model(
+    #         model=vae,
+    #         train_dataloader=train_dataloader,
+    #         test_dataloader=test_dataloader,
+    #         criterion=criterion,
+    #         optimizer=optimizer,
+    #         epochs=EPOCHS,
+    #         device=device,
+    #         log_file=f,
+    #     )
+
+    training_losses, validation_losses = train_model(
+        model=vae,
+        train_dataloader=train_dataloader,
+        test_dataloader=test_dataloader,
+        criterion=criterion,
+        optimizer=optimizer,
+        epochs=EPOCHS,
+        device=device
+    )
 
     end_time = time()
     training_time = end_time - start_time
@@ -260,30 +232,10 @@ if __name__ == "__main__":
     plt.savefig(dir_path / 'training_loss.png')
     plt.clf()
 
-    # plot the latent space (only works when LATENT_DIMS = 2)
-    if LATENT_DIMS == 2:
-        plot_latent_space_with_labels(
-            encoder=encoder,
-            dataloader=test_dataloader,
-            path=dir_path / 'latent_plot.png',
-            num_classes=10,
-            batch_size=BATCH_SIZE,
-            num_batches=16,
-            device=device,
-        )
-
-        generate_latent_space_traversal(
-            decoder=decoder,
-            path=dir_path / 'latent_traversal.png',
-            size=20,
-            device=device,
-        )
-
     #generate new images
     generate_new_images(
         decoder=decoder,
         latent_dims=LATENT_DIMS,
         path=dir_path / 'generated_images.png',
-        size=8,
         device=device,
     )

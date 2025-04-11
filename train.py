@@ -8,7 +8,7 @@ from time import strftime
 def train_model(
     model: nn.Module,
     train_dataloader: torch.utils.data.DataLoader,
-    test_dataloader: torch.utils.data.DataLoader,
+    test_dataloader: torch.utils.data.DataLoader | None,
     criterion: Callable[[nn.Module, torch.Tensor], torch.Tensor],
     optimizer: torch.optim.Optimizer,
     epochs: int,
@@ -22,7 +22,7 @@ def train_model(
     Args:
         model (nn.Module): The model to train.
         train_dataloader (torch.utils.data.DataLoader): Dataloader for training data.
-        test_dataloader (torch.utils.data.DataLoader): Dataloader for testing data.
+        test_dataloader (torch.utils.data.DataLoader): Dataloader for testing data (optional)
         criterion (Callable[[nn.Module, torch.Tensor], torch.Tensor]): Function which takes the model and batch of data and returns the loss. Must make sure the batch is sent to the same device as the model.
         optimizer (torch.optim.Optimizer): Optimizer for training.
         epochs (int): Number of epochs to train.
@@ -42,7 +42,7 @@ def train_model(
         print(f'{strftime('%H:%M:%S')} Training device: {device}', file=log_file)
 
     training_losses = []
-    validation_losses = []
+    validation_losses = [] if test_dataloader is not None else None
     for epoch in range(epochs):
         print(f'{strftime('%H:%M:%S')} TRAINING Epoch [{epoch+1}/{epochs}]', end='')
         if logging and log_file is not stdout:
@@ -64,6 +64,8 @@ def train_model(
                 running_loss = 0.0
                 print(f'{strftime('%H:%M:%S')} TRAINING Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(train_dataloader)}], Loss: {training_losses[-1]}', file=log_file)
 
+        if test_dataloader is None:
+            continue
         # validation
         if logging:
             print(f'{strftime('%H:%M:%S')} BEGIN VALIDATION Epoch [{epoch+1}/{epochs}]', file=log_file)
