@@ -27,19 +27,19 @@ if __name__ == "__main__":
     test_data = MNIST(root='./data', train=False, transform=ToTensor(), download=True)
 
     # define dataloaders for delivering batched data
-    train_dataloader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
-    test_dataloader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False, num_workers=8)
+    train_dataloader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=15)
+    test_dataloader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False, num_workers=15)
 
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    hidden_sizes = [256, 128]
+    hidden_sizes = [512, 1024]
     for hidden_size in hidden_sizes:
         # create directory for saving models
         dir_path = Path('models') / f'mnist_vae_dims_{hidden_size}'
         dir_path.mkdir(parents=True, exist_ok=True)
 
-        for latent_dims in range(1, 11):
+        for latent_dims in [1, 2, 3, 4, 6, 10, 16, 24, 32]:
             model_name = f"vae_{latent_dims}d"
 
             # define models
@@ -71,13 +71,14 @@ if __name__ == "__main__":
             print(f"Training took {training_time:.2f} seconds")
 
             # save model state, optimizer state, and loss history
-            torch.save(vae.state_dict(), dir_path / f'{model_name}.pth')
+            #torch.save(vae.state_dict(), dir_path / f'{model_name}.pth')
 
             #generate new images
             generate_new_images(
                 decoder=decoder,
                 latent_dims=latent_dims,
                 path=dir_path / f'{model_name}_images.png',
+                size=10,
                 device=device,
             )
         

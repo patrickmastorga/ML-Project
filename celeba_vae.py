@@ -29,16 +29,16 @@ class ConvEncoder(nn.Module):
         super().__init__()
         self.network = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=base_channels, kernel_size=4, stride=2, padding=1),                 # (3, 64, 64) -> (base_channels, 32, 32)
-            nn.GroupNorm(num_groups=base_channels, num_channels=base_channels),
+            nn.BatchNorm2d(base_channels),
             nonlinearity(),
             nn.Conv2d(in_channels=base_channels, out_channels=2*base_channels, kernel_size=4, stride=2, padding=1),   # (base_channels, 32, 32) -> (2*base_channels, 16, 16)
-            nn.GroupNorm(num_groups=base_channels, num_channels=2*base_channels),
+            nn.BatchNorm2d(2*base_channels),
             nonlinearity(),
             nn.Conv2d(in_channels=2*base_channels, out_channels=4*base_channels, kernel_size=4, stride=2, padding=1), # (2*base_channels, 16, 16) -> (4*base_channels, 8, 8)
-            nn.GroupNorm(num_groups=base_channels, num_channels=4*base_channels),
+            nn.BatchNorm2d(4*base_channels),
             nonlinearity(),
             nn.Conv2d(in_channels=4*base_channels, out_channels=8*base_channels, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 8) -> (8*base_channels, 4, 4)
-            #nn.GroupNorm(num_groups=base_channels, num_channels=8*base_channels),
+            #nn.BatchNorm2d(8*base_channels),
             nn.Flatten(),
             nonlinearity(),
         )
@@ -68,13 +68,13 @@ class ConvDecoder(nn.Module):
             nn.Linear(in_features=latent_dims, out_features=base_channels*8*4*4),
             nonlinearity(),
             nn.Unflatten(dim=1, unflattened_size=(base_channels*8, 4, 4)),
-            nn.ConvTranspose2d(in_channels=base_channels*8, out_channels=base_channels*4, kernel_size=4, stride=2, padding=1, output_padding=1), # (8*base_channels, 4, 4) -> (4*base_channels, 8, 8)
+            nn.ConvTranspose2d(in_channels=base_channels*8, out_channels=base_channels*4, kernel_size=4, stride=2, padding=1), # (8*base_channels, 4, 4) -> (4*base_channels, 8, 8)
             nonlinearity(),
-            nn.ConvTranspose2d(in_channels=base_channels*4, out_channels=base_channels*2, kernel_size=4, stride=2, padding=1, output_padding=1), # (4*base_channels, 8, 8) -> (2*base_channels, 16, 16)
+            nn.ConvTranspose2d(in_channels=base_channels*4, out_channels=base_channels*2, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 8) -> (2*base_channels, 16, 16)
             nonlinearity(),
-            nn.ConvTranspose2d(in_channels=base_channels*2, out_channels=base_channels, kernel_size=4, stride=2, padding=1, output_padding=1),   # (2*base_channels, 16, 16) -> (base_channels, 32, 32)
+            nn.ConvTranspose2d(in_channels=base_channels*2, out_channels=base_channels, kernel_size=4, stride=2, padding=1),   # (2*base_channels, 16, 16) -> (base_channels, 32, 32)
             nonlinearity(),
-            nn.ConvTranspose2d(in_channels=base_channels, out_channels=3, kernel_size=4, stride=2, padding=1, output_padding=1),                 # (base_channels, 32, 32) -> (3, 64, 64)
+            nn.ConvTranspose2d(in_channels=base_channels, out_channels=3, kernel_size=4, stride=2, padding=1),                 # (base_channels, 32, 32) -> (3, 64, 64)
             nn.Sigmoid()
         )
 
@@ -150,8 +150,8 @@ if __name__ == "__main__":
     BATCH_SIZE = 128
     LEARNING_RATE = 1e-3
     EPOCHS = 10
-    LATENT_DIMS = 128
-    MODEL_NAME = 'mnist_vae_linear_lg8'
+    LATENT_DIMS = 256
+    MODEL_NAME = 'celeba_vae_256_3'
     
     # define transform for dataset
     class CelebATransform:
@@ -163,12 +163,12 @@ if __name__ == "__main__":
 
     # download MNIST dataset
     print('Loading dataset...')
-    train_data = CelebA(root='./data', split='train', target_type=[], transform=CelebATransform(), download=True)
-    test_data = CelebA(root='./data', split='test', target_type=[], transform=CelebATransform(), download=True)
+    train_data = CelebA(root='./data', split='train', target_type='attr', transform=CelebATransform(), download=True)
+    test_data = CelebA(root='./data', split='test', target_type='attr', transform=CelebATransform(), download=True)
 
     # define dataloaders for delivering batched data
-    train_dataloader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
-    test_dataloader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False, num_workers=8)
+    train_dataloader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=15)
+    test_dataloader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False, num_workers=15)
 
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -208,7 +208,8 @@ if __name__ == "__main__":
         criterion=criterion,
         optimizer=optimizer,
         epochs=EPOCHS,
-        device=device
+        device=device,
+        log_interval=64,
     )
 
     end_time = time()
@@ -237,5 +238,6 @@ if __name__ == "__main__":
         decoder=decoder,
         latent_dims=LATENT_DIMS,
         path=dir_path / 'generated_images.png',
+        size=8,
         device=device,
     )

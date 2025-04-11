@@ -24,10 +24,16 @@ def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 
     with torch.no_grad():
         images = decoder(z)
 
-    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=(5,5))
+    # check if images are greyscale or RGB
+    greyscale = images.shape[1] == 1
 
+    # plot images in grid
+    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=(5,5))
     for idx, ax in enumerate(axes.flat):
-        ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
+        if greyscale:
+            ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
+        else:
+            ax.imshow(images[idx].permute(1, 2, 0).cpu().numpy())
         ax.axis('off')
         ax.set_aspect('equal')
         ax.set_adjustable('box')

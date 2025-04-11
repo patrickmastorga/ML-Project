@@ -44,8 +44,9 @@ def train_model(
     training_losses = []
     validation_losses = [] if test_dataloader is not None else None
     for epoch in range(epochs):
-        print(f'{strftime('%H:%M:%S')} TRAINING Epoch [{epoch+1}/{epochs}]', end='')
-        if logging and log_file is not stdout:
+        if not logging or log_file is not stdout:
+            print(f'{strftime('%H:%M:%S')} TRAINING Epoch [{epoch+1}/{epochs}]', end='')
+        else:
             print(f'{strftime('%H:%M:%S')} BEGIN TRAINING Epoch [{epoch+1}/{epochs}]', file=log_file)
 
         model.train()
