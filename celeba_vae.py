@@ -28,22 +28,21 @@ class ConvEncoder(nn.Module):
         """
         super().__init__()
         self.network = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=base_channels, kernel_size=4, stride=2, padding=1),                 # (3, 64, 64) -> (base_channels, 32, 32)
+            nn.Conv2d(in_channels=3, out_channels=base_channels, kernel_size=4, stride=2, padding=1),                 # (3, 64, 48) -> (base_channels, 32, 24)
             nn.BatchNorm2d(base_channels),
             nonlinearity(),
-            nn.Conv2d(in_channels=base_channels, out_channels=2*base_channels, kernel_size=4, stride=2, padding=1),   # (base_channels, 32, 32) -> (2*base_channels, 16, 16)
+            nn.Conv2d(in_channels=base_channels, out_channels=2*base_channels, kernel_size=4, stride=2, padding=1),   # (base_channels, 32, 24) -> (2*base_channels, 16, 12)
             nn.BatchNorm2d(2*base_channels),
             nonlinearity(),
-            nn.Conv2d(in_channels=2*base_channels, out_channels=4*base_channels, kernel_size=4, stride=2, padding=1), # (2*base_channels, 16, 16) -> (4*base_channels, 8, 8)
+            nn.Conv2d(in_channels=2*base_channels, out_channels=4*base_channels, kernel_size=4, stride=2, padding=1), # (2*base_channels, 16, 12) -> (4*base_channels, 8, 6)
             nn.BatchNorm2d(4*base_channels),
             nonlinearity(),
-            nn.Conv2d(in_channels=4*base_channels, out_channels=8*base_channels, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 8) -> (8*base_channels, 4, 4)
-            #nn.BatchNorm2d(8*base_channels),
+            nn.Conv2d(in_channels=4*base_channels, out_channels=8*base_channels, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 6) -> (8*base_channels, 4, 3)
             nn.Flatten(),
             nonlinearity(),
         )
-        self.output1 = nn.Linear(in_features=base_channels*8*4*4, out_features=latent_dims)
-        self.output2 = nn.Linear(in_features=base_channels*8*4*4, out_features=latent_dims)
+        self.output1 = nn.Linear(in_features=base_channels*8*4*3, out_features=latent_dims)
+        self.output2 = nn.Linear(in_features=base_channels*8*4*3, out_features=latent_dims)
 
     def forward(self, x):
         x = self.network(x)
@@ -65,16 +64,16 @@ class ConvDecoder(nn.Module):
         """
         super().__init__()
         self.network = nn.Sequential(
-            nn.Linear(in_features=latent_dims, out_features=base_channels*8*4*4),
+            nn.Linear(in_features=latent_dims, out_features=base_channels*8*4*3),
             nonlinearity(),
-            nn.Unflatten(dim=1, unflattened_size=(base_channels*8, 4, 4)),
-            nn.ConvTranspose2d(in_channels=base_channels*8, out_channels=base_channels*4, kernel_size=4, stride=2, padding=1), # (8*base_channels, 4, 4) -> (4*base_channels, 8, 8)
+            nn.Unflatten(dim=1, unflattened_size=(base_channels*8, 4, 3)),
+            nn.ConvTranspose2d(in_channels=base_channels*8, out_channels=base_channels*4, kernel_size=4, stride=2, padding=1), # (8*base_channels, 4, 3) -> (4*base_channels, 8, 6)
             nonlinearity(),
-            nn.ConvTranspose2d(in_channels=base_channels*4, out_channels=base_channels*2, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 8) -> (2*base_channels, 16, 16)
+            nn.ConvTranspose2d(in_channels=base_channels*4, out_channels=base_channels*2, kernel_size=4, stride=2, padding=1), # (4*base_channels, 8, 6) -> (2*base_channels, 16, 12)
             nonlinearity(),
-            nn.ConvTranspose2d(in_channels=base_channels*2, out_channels=base_channels, kernel_size=4, stride=2, padding=1),   # (2*base_channels, 16, 16) -> (base_channels, 32, 32)
+            nn.ConvTranspose2d(in_channels=base_channels*2, out_channels=base_channels, kernel_size=4, stride=2, padding=1),   # (2*base_channels, 16, 12) -> (base_channels, 32, 24)
             nonlinearity(),
-            nn.ConvTranspose2d(in_channels=base_channels, out_channels=3, kernel_size=4, stride=2, padding=1),                 # (base_channels, 32, 32) -> (3, 64, 64)
+            nn.ConvTranspose2d(in_channels=base_channels, out_channels=3, kernel_size=4, stride=2, padding=1),                 # (base_channels, 32, 24) -> (3, 64, 48)
             nn.Sigmoid()
         )
 
@@ -145,21 +144,21 @@ def criterion(model, batch, device) -> torch.Tensor:
     reconstructed_x, mu, logvar = model(images)
     return ELBOloss(reconstructed_x, images, mu, logvar)
 
+# define transform for dataset
+class CelebATransform:
+    def __call__(self, img):
+        img = TF.crop(img, top=60, left=41, height=128, width=96)
+        img = TF.resize(img, (64, 48))
+        img = TF.to_tensor(img)
+        return img
+
 if __name__ == "__main__":
     # hyperparameters
     BATCH_SIZE = 128
     LEARNING_RATE = 1e-3
     EPOCHS = 10
-    LATENT_DIMS = 256
-    MODEL_NAME = 'celeba_vae_256_3'
-    
-    # define transform for dataset
-    class CelebATransform:
-        def __call__(self, img):
-            img = TF.crop(img, top=60, left=25, height=128, width=128)
-            img = TF.resize(img, (64, 64))
-            img = TF.to_tensor(img)
-            return img
+    LATENT_DIMS = 2
+    MODEL_NAME = 'celeba_vae_2'
 
     # download MNIST dataset
     print('Loading dataset...')
@@ -174,13 +173,14 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # define models
-    encoder = ConvEncoder(latent_dims=LATENT_DIMS).to(device=device)
-    decoder = ConvDecoder(latent_dims=LATENT_DIMS).to(device=device)
+    encoder = ConvEncoder(latent_dims=LATENT_DIMS, base_channels=64).to(device=device)
+    decoder = ConvDecoder(latent_dims=LATENT_DIMS, base_channels=64).to(device=device)
     vae = VAE(encoder, decoder).to(device=device)
 
     # initialize optimizer
     optimizer = Adam(vae.parameters(), lr=LEARNING_RATE)
 
+    # create directory for saving model
     dir_path = Path('models') / MODEL_NAME
     dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -233,11 +233,21 @@ if __name__ == "__main__":
     plt.savefig(dir_path / 'training_loss.png')
     plt.clf()
 
+    from utils import generate_latent_space_traversal
+    generate_latent_space_traversal(
+        decoder=decoder,
+        path=dir_path / 'latent_traversal.png',
+        size=20,
+        figsize=(6, 8),
+        device=device,
+    )
+
     #generate new images
     generate_new_images(
         decoder=decoder,
         latent_dims=LATENT_DIMS,
         path=dir_path / 'generated_images.png',
         size=8,
-        device=device,
+        figsize=(6, 8),
+        device=device
     )

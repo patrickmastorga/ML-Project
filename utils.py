@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
-def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 20, device = 'cpu'):
+def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 20, figsize: tuple[int, int] = (5, 5), device = 'cpu'):
     """
     Generates a grid of images by sampling from the latent space of the decoder with a normal distribution.
     The grid is saved as a PNG file at the specified path.
@@ -14,6 +14,7 @@ def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 
         decoder (nn.Module): The decoder model.
         path (pathlike): The path to save the generated image.
         size (int): The number of steps in each direction of the latent space.
+        figsize (tuple[int, int]): The size of the figure.
         device: The device to use for computation (CPU or GPU).
     """
     decoder.to(device=device)
@@ -28,7 +29,7 @@ def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 
     greyscale = images.shape[1] == 1
 
     # plot images in grid
-    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=(5,5))
+    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=figsize)
     for idx, ax in enumerate(axes.flat):
         if greyscale:
             ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
@@ -128,7 +129,7 @@ def plot_latent_space_with_labels(encoder: nn.Module, dataloader: torch.utils.da
     plt.savefig(path)
     plt.clf()
 
-def generate_latent_space_traversal(decoder: nn.Module, path, size:int = 20, device = 'cpu'):
+def generate_latent_space_traversal(decoder: nn.Module, path, size: int = 20, figsize: tuple[int, int] = (5, 5), device = 'cpu'):
     """
     Generates a grid of images by traversing the latent space of the decoder.
     The grid is saved as a PNG file at the specified path.
@@ -137,6 +138,7 @@ def generate_latent_space_traversal(decoder: nn.Module, path, size:int = 20, dev
         decoder (nn.Module): The decoder model. Must have a two dimensional latent space.
         path (pathlike): The path to save the generated image.
         size (int): The number of steps in each direction of the latent space.
+        figsize (tuple[int, int]): The size of the figure.
         device: The device to use for computation (CPU or GPU).
     """
     decoder.to(device=device)
@@ -147,11 +149,64 @@ def generate_latent_space_traversal(decoder: nn.Module, path, size:int = 20, dev
 
     with torch.no_grad():
         images = decoder(points)
+    
+    # check if images are greyscale or RGB
+    greyscale = images.shape[1] == 1
 
-    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=(5,5))
-
+    # plot images in grid
+    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=figsize)
     for idx, ax in enumerate(axes.flat):
-        ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
+        if greyscale:
+            ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
+        else:
+            ax.imshow(images[idx].permute(1, 2, 0).cpu().numpy())
+        ax.axis('off')
+        ax.set_aspect('equal')
+        ax.set_adjustable('box')
+
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
+    plt.savefig(path)
+    plt.clf()
+
+def generate_latent_space_traversals_along_direction(decoder: nn.Module, dir: torch.Tensor, path, num_traversals: int = 5, size: int = 11, imgsize: tuple[int, int] = (5, 5), device = 'cpu'):
+    """
+    Generates a line of images by traversing the latent space of the decoder along a specified direction.
+    The line is saved as a PNG file at the specified path.
+
+    Args:
+        decoder (nn.Module): The decoder model. Must have a two dimensional latent space.
+        start (torch.Tensor): The starting point in the latent space.
+        dir (torch.Tensor): The direction to traverse in the latent space (in both directions)
+        path (pathlike): The path to save the generated image.
+        size (int): The number of images to generate
+        imgsize (tuple[int, int]): The proportion of each image in the grid.
+        device: The device to use for computation (CPU or GPU).
+    """
+    decoder.to(device=device)
+    decoder.eval()
+
+    dir = dir / torch.norm(dir)
+
+    grid = np.linspace(-4, 4, size)
+    points = torch.cat([
+        torch.stack([rand + offset * dir for offset in grid])
+        for rand in torch.randn(size=(num_traversals - 1, len(dir)))
+    ])
+    points = torch.cat([torch.stack([torch.zeros(len(dir)) + offset * dir for offset in grid]), points], dim=0).to(device=device)
+    
+    with torch.no_grad():
+        images = decoder(points)
+    
+    # check if images are greyscale or RGB
+    greyscale = images.shape[1] == 1
+
+    # plot images in grid
+    fig, axes = plt.subplots(nrows=num_traversals, ncols=size, figsize=(imgsize[0] * size, imgsize[1] * num_traversals))
+    for idx, ax in enumerate(axes.flat):
+        if greyscale:
+            ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
+        else:
+            ax.imshow(images[idx].permute(1, 2, 0).cpu().numpy())
         ax.axis('off')
         ax.set_aspect('equal')
         ax.set_adjustable('box')
