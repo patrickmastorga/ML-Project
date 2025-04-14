@@ -11,9 +11,9 @@ def generate_new_images(
         decoder: nn.Module, 
         latent_dims: int, 
         path: str | Path,
-        size: int = 20,
+        size: tuple[int, int] = (20, 20),
         sample_fn: Callable[[torch.Tensor, str], torch.Tensor] | None = None,
-        figsize: tuple[int, int] = (5, 5),
+        imgsize: tuple[int, int] = (1, 1),
         device: str = 'cpu'
     ):
     """
@@ -24,16 +24,18 @@ def generate_new_images(
         decoder (nn.Module): The decoder model.
         latent_dims (int): The number of dimensions in the latent space.
         path (pathlike): The path to save the generated image.
-        size (int): The number of steps in each direction of the latent space.
+        size (tuple[int, int]): The number of images in the grid.
         sample_fn (Callable[[torch.Tensor, str], torch.Tensor] | None): A function to sample an image from the decoder output. If None, the decoder output is used directly.
-        figsize (tuple[int, int]): The size of the figure.
+        imgsize (tuple[int, int]): The proportion of each image in the grid.
         device: The device to use for computation (CPU or GPU).
     """
+    rows, cols = size
+
     decoder.to(device=device)
     decoder.eval()
 
     # generate new images
-    z = torch.randn((size ** 2, latent_dims), device=device)
+    z = torch.randn((rows*cols, latent_dims), device=device)
     with torch.no_grad():
         output = decoder(z)
         if sample_fn is not None:
@@ -41,23 +43,12 @@ def generate_new_images(
         else:
             images = output
 
-    # check if images are greyscale or RGB
-    greyscale = images.shape[1] == 1
-
-    # plot images in grid
-    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=figsize)
-    for idx, ax in enumerate(axes.flat):
-        if greyscale:
-            ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
-        else:
-            ax.imshow(images[idx].permute(1, 2, 0).cpu().numpy())
-        ax.axis('off')
-        ax.set_aspect('equal')
-        ax.set_adjustable('box')
-
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
-    plt.savefig(path)
-    plt.clf()
+    plot_images_grid(
+        images=images,
+        path=path,
+        size=size,
+        imgsize=imgsize
+    )
 
 def plot_latent_space(
         encoder: nn.Module,
@@ -165,7 +156,7 @@ def generate_latent_space_traversal(
         path: str | Path, 
         size: int = 20, 
         sample_fn: Callable[[torch.Tensor, str], torch.Tensor] | None = None,
-        figsize: tuple[int, int] = (5, 5), 
+        imgsize: tuple[int, int] = (1, 1),
         device: str = 'cpu'
     ):
     """
@@ -177,7 +168,7 @@ def generate_latent_space_traversal(
         path (pathlike): The path to save the generated image.
         size (int): The number of steps in each direction of the latent space.
         sample_fn (Callable[[torch.Tensor, str], torch.Tensor] | None): A function to sample an image from the decoder output. If None, the decoder output is used directly.
-        figsize (tuple[int, int]): The size of the figure.
+        imgsize (tuple[int, int]): The proportion of each image in the grid.
         device (str): The device to use for computation (CPU or GPU).
     """
     decoder.to(device=device)
@@ -193,23 +184,12 @@ def generate_latent_space_traversal(
         else:
             images = output
     
-    # check if images are greyscale or RGB
-    greyscale = images.shape[1] == 1
-
-    # plot images in grid
-    fig, axes = plt.subplots(nrows=size, ncols=size, figsize=figsize)
-    for idx, ax in enumerate(axes.flat):
-        if greyscale:
-            ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')
-        else:
-            ax.imshow(images[idx].permute(1, 2, 0).cpu().numpy())
-        ax.axis('off')
-        ax.set_aspect('equal')
-        ax.set_adjustable('box')
-
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, wspace=0, hspace=0)
-    plt.savefig(path)
-    plt.clf()
+    plot_images_grid(
+        images=images,
+        path=path,
+        size=(size, size),
+        imgsize=imgsize
+    )
 
 def generate_latent_space_traversals_along_direction(
         decoder: nn.Module, 
@@ -218,7 +198,7 @@ def generate_latent_space_traversals_along_direction(
         num_traversals: int = 5, 
         size: int = 11, 
         sample_fn: Callable[[torch.Tensor, str], torch.Tensor] | None = None,
-        imgsize: tuple[int, int] = (5, 5), 
+        imgsize: tuple[int, int] = (1, 1),
         device: str = 'cpu'
     ):
     """
@@ -254,11 +234,36 @@ def generate_latent_space_traversals_along_direction(
         else:
             images = output
     
+    plot_images_grid(
+        images=images,
+        path=path,
+        size=(size, num_traversals),
+        imgsize=imgsize
+    )
+
+def plot_images_grid(
+        images: torch.Tensor,
+        path: str | Path, 
+        size: tuple[int, int], 
+        imgsize: tuple[int, int] = (1, 1), 
+    ):
+    """
+    Plots a grid of images and saves it to the specified path.
+
+    Args:
+        images (torch.Tensor): The images to plot.
+        path (pathlike): The path to save the generated image.
+        size (tuple[int, int]): The size of the grid.
+        imgsize (tuple[int, int]): The size of each image in the grid.
+    """
+    w, h = imgsize
+    rows, cols = size
+
     # check if images are greyscale or RGB
     greyscale = images.shape[1] == 1
 
     # plot images in grid
-    fig, axes = plt.subplots(nrows=num_traversals, ncols=size, figsize=(imgsize[0] * size, imgsize[1] * num_traversals))
+    fig, axes = plt.subplots(nrows=rows, ncols=cols, figsize=(w * cols, h * rows))
     for idx, ax in enumerate(axes.flat):
         if greyscale:
             ax.imshow(images[idx].squeeze().cpu().numpy(), cmap='gray')

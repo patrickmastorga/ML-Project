@@ -15,7 +15,7 @@ from mnist_vae import VAE, LinearEncoder, LinearDecoder, ConvDecoder, ConvEncode
 from train import train_model
 from utils import generate_new_images, plot_latent_space, generate_latent_space_traversal
 
-def criterion(model, batch, device) -> torch.Tensor:
+def criterion(model: nn.Module, batch: torch.Tensor, device: str) -> torch.Tensor:
     """
     Criterion function for training the model. Computes the loss using the ELBO loss function.
 

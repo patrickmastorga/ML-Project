@@ -3,6 +3,7 @@ from torchvision.datasets import CelebA
 from torch.utils.data import DataLoader
 
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.linear_model import SGDClassifier
 from pathlib import Path
 
@@ -55,9 +56,13 @@ attrs = [
 if __name__ == "__main__":
     LATENT_DIMS = 64
     MODEL_NAME = 'celeba_vae_64'
-    FEATURES = ('Smiling', 'Bald')
+    IMG_INDEX = 5
+    FEATURES = ('Smiling',) # Make sure these in order
+    ADJUSTMENTS = (3,)
 
     dir_path = Path('models') / MODEL_NAME
+    out_path = dir_path / f'adjustments_{IMG_INDEX}'
+    out_path.mkdir(parents=False, exist_ok=True)
 
     sorted_attrs = [attr for attr in attrs if attr in FEATURES]
     indices = [attrs.index(attr) for attr in sorted_attrs]
@@ -76,6 +81,22 @@ if __name__ == "__main__":
     vae = VAE(encoder, decoder).to(device=device)
     vae.load_state_dict(torch.load(dir_path / 'model.pth'))
     vae.eval()
+
+    # plot original images
+    image = data[IMG_INDEX][0]
+    plt.imshow(image.permute(1, 2, 0).cpu().numpy())
+    plt.axis('off')
+    plt.savefig(out_path / 'original_image.png')
+    plt.clf()
+
+    # plot reconstructed image
+    with torch.no_grad():
+        mu, _ = vae.encoder(image.unsqueeze(0).to(device))
+        reconstructed_image = vae.decoder(mu).squeeze(0)
+    plt.imshow(reconstructed_image.permute(1, 2, 0).cpu().numpy())
+    plt.axis('off')
+    plt.savefig(out_path / 'reconstructed_image.png')
+    plt.clf()
 
     # get latent representations
     print('Getting latent representations...')
@@ -107,15 +128,12 @@ if __name__ == "__main__":
         direction = w / np.linalg.norm(w)
         direction = torch.tensor(direction, dtype=torch.float32)
         #np.save(dir_path / f'{FEATURE}_direction.npy', direction)
-        
-        # generate latent space traversal along direction
-        print(f'Generating latent space traversal for {attr}...')
-        generate_latent_space_traversals_along_direction(
-            decoder=vae.decoder,
-            dir=direction,
-            path=dir_path / f'{attr}_traversal2.png',
-            num_traversals=5,
-            size=11,
-            imgsize=(3, 4),
-            device=device,
-        )
+
+        # adjust image
+        with torch.no_grad():
+            mu, _ = vae.encoder(image.unsqueeze(0).to(device))
+            adjusted_image = vae.decoder(mu + ADJUSTMENTS[i] * direction.to(device)).squeeze(0)
+        plt.imshow(adjusted_image.permute(1, 2, 0).cpu().numpy())
+        plt.axis('off')
+        plt.savefig(out_path / f'{attr}_{ADJUSTMENTS[i]}_adjusted_image.png')
+        plt.clf()

@@ -78,7 +78,7 @@ if __name__ == "__main__":
                 decoder=decoder,
                 latent_dims=latent_dims,
                 path=dir_path / f'{model_name}_images.png',
-                size=10,
+                size=(10, 10),
                 device=device,
             )
         

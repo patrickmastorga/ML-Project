@@ -284,6 +284,6 @@ if __name__ == "__main__":
         decoder=decoder,
         latent_dims=LATENT_DIMS,
         path=dir_path / 'generated_images.png',
-        size=8,
+        size=(8, 8),
         device=device,
     )
