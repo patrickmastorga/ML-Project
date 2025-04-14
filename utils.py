@@ -4,16 +4,28 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
+from pathlib import Path
+from typing import Callable
 
-def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 20, figsize: tuple[int, int] = (5, 5), device = 'cpu'):
+def generate_new_images(
+        decoder: nn.Module, 
+        latent_dims: int, 
+        path: str | Path,
+        size: int = 20,
+        sample_fn: Callable[[torch.Tensor, str], torch.Tensor] | None = None,
+        figsize: tuple[int, int] = (5, 5),
+        device: str = 'cpu'
+    ):
     """
     Generates a grid of images by sampling from the latent space of the decoder with a normal distribution.
     The grid is saved as a PNG file at the specified path.
 
     Args:
         decoder (nn.Module): The decoder model.
+        latent_dims (int): The number of dimensions in the latent space.
         path (pathlike): The path to save the generated image.
         size (int): The number of steps in each direction of the latent space.
+        sample_fn (Callable[[torch.Tensor, str], torch.Tensor] | None): A function to sample an image from the decoder output. If None, the decoder output is used directly.
         figsize (tuple[int, int]): The size of the figure.
         device: The device to use for computation (CPU or GPU).
     """
@@ -23,7 +35,11 @@ def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 
     # generate new images
     z = torch.randn((size ** 2, latent_dims), device=device)
     with torch.no_grad():
-        images = decoder(z)
+        output = decoder(z)
+        if sample_fn is not None:
+            images = sample_fn(output, device)
+        else:
+            images = output
 
     # check if images are greyscale or RGB
     greyscale = images.shape[1] == 1
@@ -43,7 +59,14 @@ def generate_new_images(decoder: nn.Module, latent_dims: int, path, size: int = 
     plt.savefig(path)
     plt.clf()
 
-def plot_latent_space(encoder: nn.Module, dataloader: torch.utils.data.DataLoader, path, batch_size: int, num_batches:int = 16, device = 'cpu'):
+def plot_latent_space(
+        encoder: nn.Module,
+        dataloader: torch.utils.data.DataLoader, 
+        path: str | Path, 
+        batch_size: int, 
+        num_batches:int = 16, 
+        device: str = 'cpu'
+    ):
     """
     Plots the latent space of the encoder by encoding the images from the dataloader.
     The plot is saved as a PNG file at the specified path.
@@ -82,7 +105,15 @@ def plot_latent_space(encoder: nn.Module, dataloader: torch.utils.data.DataLoade
     plt.savefig(path)
     plt.clf()
 
-def plot_latent_space_with_labels(encoder: nn.Module, dataloader: torch.utils.data.DataLoader, path, num_classes, batch_size: int, num_batches:int = 16, device = 'cpu'):
+def plot_latent_space_with_labels(
+        encoder: nn.Module, 
+        dataloader: torch.utils.data.DataLoader, 
+        path: str | Path,
+        num_classes: int,
+        batch_size: int,
+        num_batches: int = 16,
+        device: str = 'cpu'
+    ):
     """
     Plots the latent space of the encoder by encoding the images from the dataloader, and colors them by their labels.
     The plot is saved as a PNG file at the specified path.
@@ -94,7 +125,7 @@ def plot_latent_space_with_labels(encoder: nn.Module, dataloader: torch.utils.da
         num_classes (int): The number of classes in the dataset.
         batch_size (int): The number of images in each batch.
         num_batches (int): The number of batches to process.
-        device: The device to use for computation (CPU or GPU).
+        device (str): The device to use for computation (CPU or GPU).
     """
     encoder.to(device=device)
     encoder.eval()
@@ -129,7 +160,14 @@ def plot_latent_space_with_labels(encoder: nn.Module, dataloader: torch.utils.da
     plt.savefig(path)
     plt.clf()
 
-def generate_latent_space_traversal(decoder: nn.Module, path, size: int = 20, figsize: tuple[int, int] = (5, 5), device = 'cpu'):
+def generate_latent_space_traversal(
+        decoder: nn.Module, 
+        path: str | Path, 
+        size: int = 20, 
+        sample_fn: Callable[[torch.Tensor, str], torch.Tensor] | None = None,
+        figsize: tuple[int, int] = (5, 5), 
+        device: str = 'cpu'
+    ):
     """
     Generates a grid of images by traversing the latent space of the decoder.
     The grid is saved as a PNG file at the specified path.
@@ -138,8 +176,9 @@ def generate_latent_space_traversal(decoder: nn.Module, path, size: int = 20, fi
         decoder (nn.Module): The decoder model. Must have a two dimensional latent space.
         path (pathlike): The path to save the generated image.
         size (int): The number of steps in each direction of the latent space.
+        sample_fn (Callable[[torch.Tensor, str], torch.Tensor] | None): A function to sample an image from the decoder output. If None, the decoder output is used directly.
         figsize (tuple[int, int]): The size of the figure.
-        device: The device to use for computation (CPU or GPU).
+        device (str): The device to use for computation (CPU or GPU).
     """
     decoder.to(device=device)
     decoder.eval()
@@ -148,7 +187,11 @@ def generate_latent_space_traversal(decoder: nn.Module, path, size: int = 20, fi
     points = torch.tensor([[norm.ppf(x), norm.ppf(y)] for x in grid for y in grid], dtype=torch.float32, device=device)
 
     with torch.no_grad():
-        images = decoder(points)
+        output = decoder(points)
+        if sample_fn is not None:
+            images = sample_fn(output, device)
+        else:
+            images = output
     
     # check if images are greyscale or RGB
     greyscale = images.shape[1] == 1
@@ -168,7 +211,16 @@ def generate_latent_space_traversal(decoder: nn.Module, path, size: int = 20, fi
     plt.savefig(path)
     plt.clf()
 
-def generate_latent_space_traversals_along_direction(decoder: nn.Module, dir: torch.Tensor, path, num_traversals: int = 5, size: int = 11, imgsize: tuple[int, int] = (5, 5), device = 'cpu'):
+def generate_latent_space_traversals_along_direction(
+        decoder: nn.Module, 
+        dir: torch.Tensor, 
+        path: str | Path, 
+        num_traversals: int = 5, 
+        size: int = 11, 
+        sample_fn: Callable[[torch.Tensor, str], torch.Tensor] | None = None,
+        imgsize: tuple[int, int] = (5, 5), 
+        device: str = 'cpu'
+    ):
     """
     Generates a line of images by traversing the latent space of the decoder along a specified direction.
     The line is saved as a PNG file at the specified path.
@@ -179,8 +231,9 @@ def generate_latent_space_traversals_along_direction(decoder: nn.Module, dir: to
         dir (torch.Tensor): The direction to traverse in the latent space (in both directions)
         path (pathlike): The path to save the generated image.
         size (int): The number of images to generate
+        sample_fn (Callable[[torch.Tensor, str], torch.Tensor] | None): A function to sample an image from the decoder output. If None, the decoder output is used directly.
         imgsize (tuple[int, int]): The proportion of each image in the grid.
-        device: The device to use for computation (CPU or GPU).
+        device (str): The device to use for computation (CPU or GPU).
     """
     decoder.to(device=device)
     decoder.eval()
@@ -195,7 +248,11 @@ def generate_latent_space_traversals_along_direction(decoder: nn.Module, dir: to
     points = torch.cat([torch.stack([torch.zeros(len(dir)) + offset * dir for offset in grid]), points], dim=0).to(device=device)
     
     with torch.no_grad():
-        images = decoder(points)
+        output = decoder(points)
+        if sample_fn is not None:
+            images = sample_fn(output, device)
+        else:
+            images = output
     
     # check if images are greyscale or RGB
     greyscale = images.shape[1] == 1

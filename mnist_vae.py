@@ -175,7 +175,7 @@ def ELBOloss(reconstucted_x: torch.Tensor, original_x: torch.Tensor, mu: torch.T
     else:
         return elbo
     
-def criterion(model, batch, device) -> torch.Tensor:
+def criterion(model: nn.Module, batch: torch.Tensor, device: str) -> torch.Tensor:
     """
     Criterion function for training the model. Computes the loss using the ELBO loss function.
 

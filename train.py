@@ -9,7 +9,7 @@ def train_model(
     model: nn.Module,
     train_dataloader: torch.utils.data.DataLoader,
     test_dataloader: torch.utils.data.DataLoader | None,
-    criterion: Callable[[nn.Module, torch.Tensor], torch.Tensor],
+    criterion: Callable[[nn.Module, torch.Tensor, str], torch.Tensor],
     optimizer: torch.optim.Optimizer,
     epochs: int,
     device: str = 'cpu',

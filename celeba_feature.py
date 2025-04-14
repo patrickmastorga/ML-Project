@@ -6,8 +6,7 @@ import numpy as np
 from sklearn.linear_model import SGDClassifier
 from pathlib import Path
 
-from celeba_vae import CelebATransform, ConvDecoder, ConvEncoder, VAE
-
+from celeba_vae_bernoulli import CelebATransform, ConvDecoder, ConvEncoder, VAE
 from utils import generate_latent_space_traversals_along_direction
 
 attrs = [
@@ -56,7 +55,7 @@ attrs = [
 if __name__ == "__main__":
     LATENT_DIMS = 64
     MODEL_NAME = 'celeba_vae_64'
-    FEATURES = ('Male', 'Smiling', 'Bald', 'Black_Hair', 'Gray_Hair')
+    FEATURES = ('Eyeglasses')
 
     dir_path = Path('models') / MODEL_NAME
 
@@ -70,7 +69,6 @@ if __name__ == "__main__":
 
     # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
     # load model
     encoder = ConvEncoder(latent_dims=LATENT_DIMS, base_channels=64).to(device=device)
@@ -114,7 +112,7 @@ if __name__ == "__main__":
         generate_latent_space_traversals_along_direction(
             decoder=vae.decoder,
             dir=torch.tensor(direction, dtype=torch.float32),
-            path=dir_path / f'{attr}_traversal.png',
+            path=dir_path / f'{attr}_traversal2.png',
             num_traversals=5,
             size=11,
             imgsize=(3, 4),
