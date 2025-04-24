@@ -1,6 +1,7 @@
 # Variational Autoencoder
 ## applied to MNIST and CelebA
 Collaborators: Patrick Astorga, Gregor Avgustin, Trinayaan Hariharan, Lauren Nolton, Bodan Pittman
+
 CS 4641 Machine Learning Project:
  - `mnist_vae.py`: Contains implementation of VAE on the MNIST dataset
  - `celeba_vae_bernoulli.py`: Contains implementation of VAE on the CelebA dataset
